@@ -17,7 +17,7 @@ const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv
 
 const watchMode = process.argv.includes('--watch');
 const siteTitle = 'Devlog';
-const siteUrl = 'https://ste2425.github.io';
+const siteUrl = 'https://ste2425.github.io/devlog';
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
