@@ -167,6 +167,10 @@ function rootRelativePrefix(pagePath) {
   return pagePath === 'index.html' ? '' : '../';
 }
 
+function isRootPage(pagePath) {
+  return pagePath === 'index.html' || pagePath === 'projects.html';
+}
+
 function rewriteMediaUrls(html, pagePath) {
   const prefix = rootRelativePrefix(pagePath);
   const result = String(html).replace(/(src|href)=["']\/(images|videos)\/([^"']+)["']/g, (_, attr, type, file) => `${attr}="${prefix}${type}/${file}"`);
@@ -174,10 +178,10 @@ function rewriteMediaUrls(html, pagePath) {
 }
 
 function renderLayout({ title, body, pagePath, projectLinks, cssHref }) {
-  const rootHref = pagePath === 'index.html' ? './' : '../';
+  const rootHref = isRootPage(pagePath) ? './' : '../';
   const projectList = projectLinks
     .map((project) => {
-      const href = pagePath === 'index.html'
+      const href = isRootPage(pagePath)
         ? `projects/${slugify(project)}.html`
         : `../projects/${slugify(project)}.html`;
       return `<li><a href="${href}">${escapeHtml(project)}</a></li>`;
@@ -560,7 +564,7 @@ function buildSite() {
     `,
     pagePath: 'projects.html',
     projectLinks,
-    cssHref: `../${cssHref}`,
+    cssHref,
   });
   fs.writeFileSync(path.join(publicDir, 'projects.html'), projectIndexHtml, 'utf8');
 
