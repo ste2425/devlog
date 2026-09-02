@@ -247,13 +247,32 @@ video {
   color: var(--muted);
 }
 
+.article-body code {
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 0.15em 0.35em;
+  border: 1px solid rgba(215, 166, 255, 0.35);
+  border-radius: 4px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
 .article-body pre {
-  background: #111827;
+  background: #241a33;
   color: #edf2ff;
   padding: 1rem;
   border-radius: 12px;
   overflow-x: auto;
   border: 1px solid var(--border);
+}
+
+.article-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  font-size: inherit;
 }
 
 .eyebrow {
