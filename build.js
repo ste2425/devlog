@@ -17,6 +17,7 @@ const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv
 
 const watchMode = process.argv.includes('--watch');
 const siteTitle = 'Devlog';
+const siteUrl = 'https://ste2425.github.io';
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -40,8 +41,30 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function escapeXml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 function stripHtml(value) {
   return String(value || '').replace(/<[^>]+>/g, ' ');
+}
+
+function decodeHtmlEntities(value) {
+  const entities = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    quot: '"',
+    '#39': "'",
+  };
+
+  return String(value || '').replace(/&(#39|amp|apos|gt|lt|quot);/g, (entity, name) => entities[name]);
 }
 
 function normalizeScalar(value) {
@@ -156,11 +179,55 @@ function markdownToHtml(body) {
 }
 
 function getExcerpt(body, fallback = 'Read more') {
-  const text = stripHtml(marked.parse(body || '')).replace(/\s+/g, ' ').trim();
+  const text = decodeHtmlEntities(stripHtml(marked.parse(body || ''))).replace(/\s+/g, ' ').trim();
   if (!text) {
     return fallback;
   }
   return text.length > 180 ? `${text.slice(0, 177).trim()}...` : text;
+}
+
+function wrapText(value, maxCharacters) {
+  const words = String(value || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+
+  for (const word of words) {
+    const nextLine = line ? `${line} ${word}` : word;
+    if (line && nextLine.length > maxCharacters) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = nextLine;
+    }
+  }
+
+  if (line) {
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+function createSocialImage({ title, project, excerpt, targetPath }) {
+  const titleLines = wrapText(title, 32).slice(0, 2);
+  const excerptLines = wrapText(excerpt, 68).slice(0, 3);
+  const titleMarkup = titleLines
+    .map((line, index) => `<tspan x="96" dy="${index === 0 ? 0 : 68}">${escapeXml(line)}</tspan>`)
+    .join('');
+  const excerptMarkup = excerptLines
+    .map((line, index) => `<tspan x="96" dy="${index === 0 ? 0 : 34}">${escapeXml(line)}</tspan>`)
+    .join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+    <rect width="1200" height="630" fill="#0d1117"/>
+    <rect x="48" y="48" width="1104" height="534" rx="18" fill="#111827" stroke="#334155" stroke-width="2"/>
+    <rect x="48" y="48" width="12" height="534" rx="6" fill="#d7a6ff"/>
+    <text x="96" y="126" fill="#d7a6ff" font-family="sans-serif" font-size="26" font-weight="700" letter-spacing="3">${escapeXml(project).toUpperCase()}</text>
+    <text x="96" y="230" fill="#e5e7eb" font-family="sans-serif" font-size="58" font-weight="700">${titleMarkup}</text>
+    <text x="96" y="390" fill="#9aa4b2" font-family="sans-serif" font-size="27">${excerptMarkup}</text>
+    <text x="96" y="530" fill="#f0b8ff" font-family="sans-serif" font-size="25" font-weight="700">${siteTitle}</text>
+  </svg>`;
+
+  return sharp(Buffer.from(svg)).png().toFile(targetPath);
 }
 
 function rootRelativePrefix(pagePath) {
@@ -177,7 +244,7 @@ function rewriteMediaUrls(html, pagePath) {
   return result.replace(/(src|href)=["'](images|videos)\/([^"']+)["']/g, (_, attr, type, file) => `${attr}="${prefix}${type}/${file}"`);
 }
 
-function renderLayout({ title, body, pagePath, projectLinks, cssHref }) {
+function renderLayout({ title, body, pagePath, projectLinks, cssHref, description, canonicalUrl, socialImageUrl }) {
   const rootHref = isRootPage(pagePath) ? './' : '../';
   const projectList = projectLinks
     .map((project) => {
@@ -194,7 +261,10 @@ function renderLayout({ title, body, pagePath, projectLinks, cssHref }) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(title)} | ${siteTitle}</title>
-    <meta name="description" content="A minimal developer log and project journal." />
+    <meta name="description" content="${escapeHtml(description || 'A minimal developer log and project journal.')}" />
+    ${canonicalUrl ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />` : ''}
+    ${canonicalUrl ? `<meta property="og:type" content="article" />\n    <meta property="og:title" content="${escapeHtml(title)} | ${siteTitle}" />\n    <meta property="og:description" content="${escapeHtml(description || '')}" />\n    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />\n    <meta property="og:site_name" content="${siteTitle}" />` : ''}
+    ${socialImageUrl ? `<meta property="og:image" content="${escapeHtml(socialImageUrl)}" />\n    <meta property="og:image:width" content="1200" />\n    <meta property="og:image:height" content="630" />\n    <meta name="twitter:card" content="summary_large_image" />\n    <meta name="twitter:title" content="${escapeHtml(title)} | ${siteTitle}" />\n    <meta name="twitter:description" content="${escapeHtml(description || '')}" />\n    <meta name="twitter:image" content="${escapeHtml(socialImageUrl)}" />` : ''}
     <link rel="stylesheet" href="${cssHref}" />
   </head>
   <body>
@@ -325,6 +395,9 @@ function renderProjectPage(projectName, posts, cssHref) {
 }
 
 function renderPostPage(post, projectLinks, cssHref) {
+  const pagePath = `posts/${post.slug}.html`;
+  const canonicalUrl = `${siteUrl}/${pagePath}`;
+  const socialImageUrl = `${siteUrl}/social/${post.slug}.png`;
   const projectHref = `../projects/${slugify(post.project)}.html`;
   const body = `
     <article class="post-article">
@@ -341,7 +414,7 @@ function renderPostPage(post, projectLinks, cssHref) {
     </article>
   `;
 
-  return renderLayout({ title: post.title, body, pagePath: `posts/${post.slug}.html`, projectLinks, cssHref });
+  return renderLayout({ title: post.title, body, pagePath, projectLinks, cssHref, description: post.excerpt, canonicalUrl, socialImageUrl });
 }
 
 function copyDirectory(source, target) {
@@ -480,11 +553,12 @@ function hashContent(content) {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-function buildSite() {
+async function buildSite() {
   fs.rmSync(publicDir, { recursive: true, force: true });
   ensureDir(publicDir);
   ensureDir(path.join(publicDir, 'posts'));
   ensureDir(path.join(publicDir, 'projects'));
+  ensureDir(path.join(publicDir, 'social'));
 
   copyDirectory(imagesDir, path.join(publicDir, 'images'));
   copyDirectory(videosDir, path.join(publicDir, 'videos'));
@@ -570,6 +644,12 @@ function buildSite() {
 
   for (const post of posts) {
     const pagePath = `posts/${post.slug}.html`;
+    await createSocialImage({
+      title: post.title,
+      project: post.project,
+      excerpt: post.excerpt,
+      targetPath: path.join(publicDir, 'social', `${post.slug}.png`),
+    });
     const postPageHtml = renderPostPage(post, projectLinks, `../${cssHref}`);
     fs.writeFileSync(path.join(publicDir, pagePath), postPageHtml, 'utf8');
   }
