@@ -244,7 +244,7 @@ function rewriteMediaUrls(html, pagePath) {
   return result.replace(/(src|href)=["'](images|videos)\/([^"']+)["']/g, (_, attr, type, file) => `${attr}="${prefix}${type}/${file}"`);
 }
 
-function renderLayout({ title, body, pagePath, projectLinks, cssHref, description, canonicalUrl, socialImageUrl }) {
+function renderLayout({ title, body, pagePath, projectLinks, cssHref, description, canonicalUrl, socialImageUrl, ogType = 'article' }) {
   const rootHref = isRootPage(pagePath) ? './' : '../';
   const projectList = projectLinks
     .map((project) => {
@@ -263,7 +263,7 @@ function renderLayout({ title, body, pagePath, projectLinks, cssHref, descriptio
     <title>${escapeHtml(title)} | ${siteTitle}</title>
     <meta name="description" content="${escapeHtml(description || 'A minimal developer log and project journal.')}" />
     ${canonicalUrl ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />` : ''}
-    ${canonicalUrl ? `<meta property="og:type" content="article" />\n    <meta property="og:title" content="${escapeHtml(title)} | ${siteTitle}" />\n    <meta property="og:description" content="${escapeHtml(description || '')}" />\n    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />\n    <meta property="og:site_name" content="${siteTitle}" />` : ''}
+    ${canonicalUrl ? `<meta property="og:type" content="${escapeHtml(ogType)}" />\n    <meta property="og:title" content="${escapeHtml(title)} | ${siteTitle}" />\n    <meta property="og:description" content="${escapeHtml(description || '')}" />\n    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />\n    <meta property="og:site_name" content="${siteTitle}" />` : ''}
     ${socialImageUrl ? `<meta property="og:image" content="${escapeHtml(socialImageUrl)}" />\n    <meta property="og:image:width" content="1200" />\n    <meta property="og:image:height" content="630" />\n    <meta name="twitter:card" content="summary_large_image" />\n    <meta name="twitter:title" content="${escapeHtml(title)} | ${siteTitle}" />\n    <meta name="twitter:description" content="${escapeHtml(description || '')}" />\n    <meta name="twitter:image" content="${escapeHtml(socialImageUrl)}" />` : ''}
     <link rel="stylesheet" href="${cssHref}" />
   </head>
@@ -343,6 +343,8 @@ function renderLayout({ title, body, pagePath, projectLinks, cssHref, descriptio
 
 function renderHomePage(posts, cssHref) {
   const projectLinks = [...new Set(posts.map((post) => post.project))];
+  const canonicalUrl = `${siteUrl}/`;
+  const socialImageUrl = `${siteUrl}/social/home.png`;
   const postCards = posts
     .map((post) => {
       const projectHref = `projects/${slugify(post.project)}.html`;
@@ -369,7 +371,17 @@ function renderHomePage(posts, cssHref) {
     <section class="post-list">${postCards}</section>
   `;
 
-  return renderLayout({ title: 'Home', body, pagePath: 'index.html', projectLinks, cssHref });
+  return renderLayout({
+    title: 'Home',
+    body,
+    pagePath: 'index.html',
+    projectLinks,
+    cssHref,
+    description: 'Notes, experiments, and project updates from Devlog.',
+    canonicalUrl,
+    socialImageUrl,
+    ogType: 'website',
+  });
 }
 
 function renderProjectPage(projectName, posts, cssHref) {
@@ -607,6 +619,12 @@ async function buildSite() {
   const cssHref = `styles.${cssHash}.css`;
 
   const homeHtml = renderHomePage(posts, cssHref);
+  await createSocialImage({
+    title: 'Developer log',
+    project: 'Latest work',
+    excerpt: 'Notes, experiments, and project updates.',
+    targetPath: path.join(publicDir, 'social', 'home.png'),
+  });
   fs.writeFileSync(path.join(publicDir, 'index.html'), homeHtml, 'utf8');
 
   const projectMap = new Map();
